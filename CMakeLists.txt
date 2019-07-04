@@ -2,16 +2,20 @@ project(blackjack)
 cmake_minimum_required(VERSION 3.8)
 
 add_library(blackjack_lib
-    BettingStrategy.cpp
-    Card.cpp
-    ComputeProbability.cpp
-    Player.cpp
-    Strategy.cpp
+    include/blackjack/BettingStrategy.cpp
+    include/blackjack/Card.cpp
+    include/blackjack/ComputeProbability.cpp
+    include/blackjack/Game.cpp
+    include/blackjack/Player.cpp
+    include/blackjack/Strategy.cpp
 )
-target_include_directories(blackjack_lib PUBLIC ${PROJECT_SOURCE_DIR})
+target_include_directories(blackjack_lib PUBLIC
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+)
 target_compile_features(blackjack_lib PUBLIC cxx_std_14)
 
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME} include/blackjack/main.cpp)
 target_link_libraries(${PROJECT_NAME} blackjack_lib)
 
 

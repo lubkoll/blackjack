@@ -1,8 +1,8 @@
 #pragma once
 
-#include <BettingStrategy.h>
-#include <Card.h>
-#include <Strategy.h>
+#include <blackjack/BettingStrategy.h>
+#include <blackjack/Card.h>
+#include <blackjack/Strategy.h>
 
 #include <vector>
 #include <functional>

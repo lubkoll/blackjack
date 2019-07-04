@@ -1,5 +1,5 @@
-#include <Card.h>
-#include <Player.h>
+#include <blackjack/Card.h>
+#include <blackjack/Player.h>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>

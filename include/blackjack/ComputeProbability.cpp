@@ -1,8 +1,8 @@
 #include "ComputeProbability.h"
 
-#include <Card.h>
-#include <Game.h>
-#include <Player.h>
+#include <blackjack/Card.h>
+#include <blackjack/Game.h>
+#include <blackjack/Player.h>
 
 #include <cassert>
 #include <iostream>
@@ -13,7 +13,7 @@ namespace blackjack
     std::ostream& operator<<( std::ostream& os, const Probability& probability )
     {
         return os << "win: " << probability.win << ", tie: " << probability.tie
-                  << "loss: " << probability.loss
+                  << ", loss: " << probability.loss
                   << ", expected payout: " << probability.expectedPayout;
     }
 
@@ -48,15 +48,10 @@ namespace blackjack
                     continue;
 
                 const auto p = double( count ) / deck.size();
-                //                std::cout << "drawing " << card << ": " << p << std::endl;
-                //                std::cout << "p = " << count << "/" << deck.size() << std::endl;
                 draw( hand, deck, card );
                 DiscardLastCard discard{hand, deck};
                 const auto subProbability = f();
-                //                std::cout << "FOR " << card << ": " << p << std::endl;
-                //                std::cout << "subProb: " << subProbability << std::endl;
                 probability.axpy( p, subProbability );
-                //                std::cout << "updated probability: " << probability << std::endl;
             }
             return probability;
         }
@@ -72,7 +67,6 @@ namespace blackjack
         {
             for ( auto i = 0u; i < player.hands.size(); ++i )
             {
-                std::cout << "first call: " << player.hands[ i ] << std::endl;
                 const auto maxPlayerValue = getMaxValidValue( player.hands[ i ] );
                 if ( maxPlayerValue == -1 )
                 {
@@ -89,43 +83,26 @@ namespace blackjack
 
         if ( firstCall && allBust )
         {
-            std::cout << "all bust" << std::endl;
             return probability;
         }
 
-        auto decision = dealer.decider( dealer.hands, dealer.hands.front() );
-        std::cout << "dealer: " << decision << std::endl;
+        const auto decision = dealer.decider( dealer.hands, dealer.hands.front() );
         if ( decision == Decision::Draw )
         {
             return drawPossibleCardsAndEvaluate(
                 dealer.hands.front(), deck, [&player, &dealer, &deck] {
                     return computeProbabilityAfterPlayer( player, dealer, deck, false );
                 } );
-            //                for(auto card : deck.getCardTypes())
-            //                {
-            //                    const auto count = deck.getCount(card);
-            //                    if(count == 0)
-            //                        continue;
-
-            //                    const auto p = double(count)/deck.size();
-            //                    draw(dealer.hands.front(), deck, card);
-            //                    DiscardLastCard discard{dealer.hands.front(), deck};
-            //                    const auto subProbability = playDealerAfterStartingHand(player,
-            //                    dealer, deck, false);
-            //                    probability.axpy(p, subProbability);
-            //                }
-            //                return probability;
         }
 
         const auto p = 1.0 / player.hands.size();
-        //        std::cout << "Hands: " << player.hands.size() << std::endl;
         for ( auto i = 0u; i < player.hands.size(); ++i )
         {
-            std::cout << "bet: " << player.bets[ i ] << std::endl;
-            std::cout << "final player hand: " << std::endl;
-            std::cout << player.hands[ i ] << std::endl;
-            std::cout << "final dealer hand: " << std::endl;
-            std::cout << dealer.hands.front() << std::endl;
+            //            std::cout << "bet: " << player.bets[ i ] << std::endl;
+            //            std::cout << "final player hand: " << std::endl;
+            //            std::cout << player.hands[ i ] << std::endl;
+            //            std::cout << "final dealer hand: " << std::endl;
+            //            std::cout << dealer.hands.front() << std::endl;
             const auto maxPlayerValue = getMaxValidValue( player.hands[ i ] );
             const auto maxDealerValue = getMaxValidValue( dealer.hands.front() );
             if ( maxPlayerValue == -1 )
@@ -155,29 +132,20 @@ namespace blackjack
                                                              Deck& deck, const Rules& rules,
                                                              bool splitAces = false )
         {
-            std::cout << "compute prob impl" << std::endl;
             for ( auto i = 0u; i < player.hands.size(); ++i )
             {
-                std::cout << "hand: " << player.hands[ i ] << std::endl;
-                std::cout << player.decider( player.hands, player.hands[ i ],
-                                             rules.isSplittingAllowed( player.hands[ i ] ) &&
-                                                 !splitAces )
-                          << std::endl;
                 auto decision =
                     player.hands[ i ].size() > 1
                         ? player.decider( player.hands, player.hands[ i ],
                                           rules.isSplittingAllowed( player.hands[ i ] ) &&
                                               !splitAces )
                         : Decision::Draw;
-                std::cout << "player decision: " << decision << std::endl;
+
                 if ( splitAces )
                     decision = Decision::Stand;
 
                 if ( decision == Decision::Split )
                 {
-                    std::cout << " -> SPLIT" << std::endl;
-                    std::cout << dealer.hands.front()[ 0 ] << std::endl;
-                    std::cout << player.hands[ i ] << std::endl;
                     player.hands[ i ].pop_back();
                     auto copy = player.hands[ i ];
                     const auto card = copy.front();

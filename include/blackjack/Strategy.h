@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Card.h>
+#include <blackjack/Card.h>
 
 #include <limits>
 #include <vector>

@@ -30,3 +30,8 @@
 *.exe
 *.out
 *.app
+
+bj_rsa
+bj_rsa.pub
+CMakeLists.txt.user
+build/*

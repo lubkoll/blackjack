@@ -30,7 +30,8 @@ namespace blackjack
                           BettingStrategy bettingStrategy = []( const Deck& ) { return 1; } );
 
         Decision operator()( const std::vector< Hand >& hands, const Hand& hand,
-                             bool allowSplitting = true );
+                             bool allowSplitting = true, bool allowDoubleDown = true,
+                             bool allowInsurance = true );
 
         double getCash() const;
 

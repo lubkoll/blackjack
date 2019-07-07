@@ -20,15 +20,22 @@ namespace blackjack
 
     struct Rules
     {
-        std::function< bool( const Hand& ) > isSplittingAllowed = []( const Hand& ) {
+        static bool isAlwaysAllowed( const Hand& )
+        {
             return true;
-        };
-        std::function< bool( const Hand& ) > isDoubleDownAllowed = []( const Hand& ) {
-            return true;
-        };
-        std::function< bool( const Hand& ) > isInsuranceAllowed = []( const Hand& ) {
+        }
+
+        static bool isNeverAllowed( const Hand& )
+        {
             return false;
-        };
+        }
+
+        using Rule = bool ( * )( const Hand& );
+
+        Rule isSplittingAllowed = &isAlwaysAllowed;
+        Rule isDoubleDownAllowed = &isAlwaysAllowed;
+        Rule isInsuranceAllowed = &isNeverAllowed;
+        double factorForNaturals = 1.5;
     };
 
     struct DiscardCardsAtEndOfGame
@@ -43,10 +50,11 @@ namespace blackjack
 
     Record playDealerAfterStartingHand( Deck& deck, Player& player, Player& dealer );
 
-    Record playAfterStartingHand( Deck& deck, Player& player, Player& dealer,
-                                  bool allowSplitting = true, bool splitAces = false );
+    Record playAfterStartingHand( Deck& deck, Player& player, Player& dealer, const Rules& rules,
+                                  bool wasSplit = false, bool splitAces = false );
 
-    Record playAgainstDealer( Player& player, Player& dealer, Deck& deck );
+    Record playAgainstDealer( Player& player, Player& dealer, Deck& deck, const Rules& rules );
 
-    Record playAgainstDealer( Player& player, Player& dealer, Deck& deck, int numberOfGames );
+    Record playAgainstDealer( Player& player, Player& dealer, Deck& deck, const Rules& rules,
+                              int numberOfGames );
 }

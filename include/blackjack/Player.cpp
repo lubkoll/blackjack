@@ -24,10 +24,10 @@ namespace blackjack
     }
 
     Decision Decider::operator()( const std::vector< Hand >& hands, const Hand& hand,
-                                  bool allowSplitting )
+                                  bool allowSplitting, bool allowDoubleDown, bool allowInsurance )
     {
         assert( strategy );
-        return strategy( hands, hand, allowSplitting );
+        return strategy( hands, hand, allowSplitting, allowDoubleDown, allowInsurance );
     }
 
     double Decider::getCash() const

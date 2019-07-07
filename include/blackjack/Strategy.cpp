@@ -1,6 +1,7 @@
 #include "Strategy.h"
 
 #include <algorithm>
+#include <cassert>
 #include <iostream>
 
 namespace blackjack
@@ -15,10 +16,15 @@ namespace blackjack
     }
 #undef X
 
-    Decision defaultDealerStrategy( const std::vector< Hand >&, const Hand& hand, bool )
+    Decision defaultDealerStrategy( const std::vector< Hand >&, const Hand& hand, bool, bool, bool )
     {
         const auto max = getMaxValidValue( hand );
         return ( max < 17 && max != -1 ) ? Decision::Draw : Decision::Stand;
+    }
+
+    Decision alwaysStandStrategy( const std::vector< Hand >&, const Hand&, bool, bool, bool )
+    {
+        return Decision::Stand;
     }
 
     namespace basic
@@ -117,15 +123,15 @@ namespace blackjack
     }
 
     Decision BasicStrategy::operator()( const std::vector< Hand >&, const Hand& hand,
-                                        bool splitAllowed )
+                                        bool splitAllowed, bool doubleDownAllowed, bool )
     {
         using namespace basic;
         const auto openDealerValue = getValue( dealerHand.front() );
-        //            if(do_split(hand, openDealerValue) && splitAllowed)
-        //                return Decision::Split;
+        if ( splitAllowed && do_split( hand, openDealerValue ) )
+            return Decision::Split;
 
         //            std::cout << openDealerValue << " || " << hand << std::endl;
-        if ( do_double_down( hand, openDealerValue ) )
+        if ( doubleDownAllowed && do_double_down( hand, openDealerValue ) )
             return Decision::DoubleDown;
 
         if ( do_stand( hand, openDealerValue ) )
@@ -135,7 +141,7 @@ namespace blackjack
 
     namespace ten_count
     {
-        const auto dmin = std::numeric_limits< double >::min();
+        const auto dmin = std::numeric_limits< double >::lowest();
         const auto dmax = std::numeric_limits< double >::max();
 
         static const auto yes = dmax;
@@ -200,8 +206,8 @@ namespace blackjack
 
         const std::vector< std::vector< double > > softStandingNumbers = {
             // 2    3       4       5       6       7       8       9       10      11
-            {stand, stand, stand, stand, stand, stand, stand, draw, draw, stand}, // 18
-            {stand, stand, stand, stand, stand, stand, stand, stand, stand, 2.2}, // 19
+            {stand, stand, stand, stand, stand, stand, stand, draw, draw, 2.2},     // 18
+            {stand, stand, stand, stand, stand, stand, stand, stand, stand, stand}, // 19
         };
 
         const std::vector< std::vector< double > > hardStandingNumbers = {
@@ -211,8 +217,8 @@ namespace blackjack
             {2.7, 2.9, 3.3, 3.7, 3.4, draw, draw, 1.1, 1.6, 1.2},                   // 14
             {3.2, 3.6, 4.1, 4.8, 4.3, draw, draw, 1.4, 1.9, 1.3},                   // 15
             {3.9, 4.5, 5.3, 6.5, 4.6, draw, 1.2, 1.7, 2.2, 1.4},                    // 16
-            {stand, stand, stand, stand, stand, stand, stand, stand, stand, stand}, // 17
-            {stand, stand, stand, stand, stand, stand, stand, stand, stand, 3.1},   // 18
+            {stand, stand, stand, stand, stand, stand, stand, stand, stand, 3.1},   // 17
+            {stand, stand, stand, stand, stand, stand, stand, stand, stand, stand}, // 18
         };
 
         bool do_split( const Hand& hand, int openDealerValue, double tenRatio,
@@ -266,11 +272,16 @@ namespace blackjack
                 if ( tenRatio <= standingNumbers[ i ][ openDealerValue - 2 ] )
                     return i;
             }
+            std::cout << "Could not find standing number for " << openDealerValue << ", "
+                      << tenRatio << std::endl;
+            std::cout << standingNumbers[ 0 ][ 0 ] << std::endl;
+            assert( false );
             return -1;
         }
 
         bool do_stand( const Hand& hand, int openDealerValue, double tenRatio )
         {
+            const auto playerValue = getMaxValidValue( hand );
             //            std::cout << " = do_stand: soft: " << isSoft(hand) << std::endl;
             const auto standingNumber =
                 isSoft( hand )
@@ -278,7 +289,7 @@ namespace blackjack
                     : findStandingNumber( hardStandingNumbers, openDealerValue, tenRatio ) + 12;
             //            std::cout << "standing number: " << standingNumber << std::endl;
             //            std::cout << "max: " << getMaxValidValue(hand) << std::endl;
-            return standingNumber <= getMaxValidValue( hand );
+            return standingNumber <= playerValue;
         }
     }
 
@@ -289,21 +300,25 @@ namespace blackjack
 
     TenCountStrategy::~TenCountStrategy()
     {
-        std::cout << "min ratio: " << minRatio << std::endl;
+        //        std::cout << "min ratio: " << minRatio << std::endl;
     }
 
     Decision TenCountStrategy::operator()( const std::vector< Hand >& hands, const Hand& hand,
-                                           bool splitAllowed ) const
+                                           bool splitAllowed, bool doubleDownAllowed,
+                                           bool insuranceAllowed ) const
     {
+        const auto tenRatio = computeTenCount( hands );
+        if ( insuranceAllowed && dealerHand.front() == Card::_A && tenRatio < 2 )
+            return Decision::Insure;
+
         if ( isBust( hand ) )
             return Decision::Stand;
         const auto openDealerValue = getValue( dealerHand.front() );
-        const auto tenRatio = computeTenCount( hands );
-        if ( ten_count::do_split( hand, openDealerValue, tenRatio ) && splitAllowed )
+        if ( splitAllowed && ten_count::do_split( hand, openDealerValue, tenRatio ) )
             return Decision::Split;
 
         //            std::cout << openDealerValue << " || " << hand << std::endl;
-        if ( ten_count::do_double_down( hand, openDealerValue, tenRatio ) )
+        if ( doubleDownAllowed && ten_count::do_double_down( hand, openDealerValue, tenRatio ) )
             return Decision::DoubleDown;
 
         if ( ten_count::do_stand( hand, openDealerValue, tenRatio ) )
@@ -349,5 +364,198 @@ namespace blackjack
         minRatio = std::min( minRatio, tenRatio );
         std::cout << "ratio: " << tenRatio << std::endl;
         return tenRatio;
+    }
+
+    namespace point_count
+    {
+        const auto stand = std::numeric_limits< int >::lowest();
+        const auto draw = std::numeric_limits< int >::max();
+
+        // clang-format off
+        const std::vector<std::vector<int> > hardStandingNumbers =
+        {
+            {    14,     6,     2,    -1,     0,  draw,  draw,  draw,  draw,  draw }, // 12
+            {     1,    -2,    -5,    -9,    -8,    50,  draw,  draw,  draw,  draw }, // 13
+            {    -5,    -8,   -13,   -17,   -17,    20,    38,  draw,  draw,  draw }, // 14
+            {   -12,   -17,   -21,   -26,   -28,    13,    15,    12,     8,    16 }, // 15
+            {   -21,   -25,   -30,   -34,   -35,    10,    11,     6,     2,    14 }, // 16
+            { stand, stand, stand, stand, stand, stand, stand, stand, stand,   -15 }  // 17
+        };
+
+        const auto none = std::numeric_limits<int>::max();
+
+        const std::vector<std::vector<int> > hardDoubleDownNumbers =
+        {
+            {  none,  none,  none,    20,    26,  none,  none,  none,  none,  none }, // 5
+            {  none,  none,    27,    18,    24,  none,  none,  none,  none,  none }, // 6
+            {  none,    45,    21,    14,    17,  none,  none,  none,  none,  none }, // 7
+            {  none,    22,    11,     5,     5,    22,  none,  none,  none,  none }, // 8
+            {     3,     0,    -5,   -10,   -12,     4,    14,  none,  none,  none }, // 9
+            {   -15,   -17,   -21,   -24,   -26,   -17,    -9,    -3,     7,     6 }, // 10
+            {   -23,   -26,   -29,   -33,   -35,   -26,   -16,   -10,    -9,    -3 }  // 11
+        };
+
+        const std::vector< std::vector< int > > softDoubleDownNumbers = {
+            // 3       4       5       6       7
+            { 10,   2, -19, -13 }, // A,2
+            { 11,  -3, -13, -19 }, // A,3
+            { 19,  -7, -16, -23 }, // A,4
+            { 21,  -6, -16, -32 }, // A,5
+            { -6, -14, -28, -30 }, // A,6
+            { -2, -15, -18, -23 }, // A,7
+            {  9,   5,   1,   0 }, // A,8
+            { 20,  12,   8,   8 }  // A,9
+        };
+
+        const auto split = std::numeric_limits<int>::lowest();
+        const std::vector<std::vector<int> > splittingNumbers =
+        {
+            {    -9,   -15,   -22,   -30, split, split,  none,  none,  none,  none }, // 2
+            {   -21,   -34, split, split, split, split,  none,  none,  none,  none }, // 3
+            {  none,    18,     8,     0,  none,  none,  none,  none,  none,  none }, // 4
+            {  none,  none,  none,  none,  none,  none,  none,  none,  none,  none }, // 5
+            {     0,    -3,    -8,   -13,   -16,    -8,  none,  none,  none,  none }, // 6
+            {   -22,   -29,   -35, split, split, split, split,  none,  none,  none }, // 7
+            { split, split, split, split, split, split, split, split,  none,   -18 }, // 8
+            {    -3,    -8,   -10,   -15,   -14,     8,   -16,   -22,  none,    10 }, // 9
+            {    25,    17,    10,     6,     7,    19,  none,  none,  none,  none }, // 10
+            { split, split, split, split, split,   -33,   -24,   -22,   -20,   -17 }, // 11
+        };
+        // clang-format on
+
+        bool do_split( const Hand& hand, int openDealerValue, double pointRatio,
+                       bool doubleDownOnEightAllowed )
+        {
+            if ( !isPair( hand ) )
+                return false;
+
+            if ( hand.front() == Card::_8 && openDealerValue == 10 && pointRatio < 24 )
+                return true;
+            if ( hand.front() == Card::_4 && openDealerValue == 6 && !doubleDownOnEightAllowed &&
+                 pointRatio > 5 )
+                return true;
+            if ( hand.front() == Card::_3 && openDealerValue == 8 &&
+                 ( pointRatio > 6 || pointRatio < -2 ) )
+                return true;
+            return pointRatio >
+                   splittingNumbers[ getValue( hand.front() ) - 2 ][ openDealerValue - 2 ];
+        }
+
+        bool do_double_down( const Hand& hand, int openDealerValue, double pointRatio )
+        {
+            if ( isSoft( hand ) )
+            {
+                const auto minValue = getMinValue( hand.front(), hand.back() );
+                if ( hand.size() != 2 || openDealerValue > 6 || minValue > 9 )
+                    return false;
+                if ( openDealerValue == 2 && minValue == 6 && pointRatio > 0 && pointRatio < 11 )
+                    return true;
+                return pointRatio > softDoubleDownNumbers[ minValue - 2 ][ openDealerValue - 2 ];
+            }
+
+            const auto value = getMaxValidValue( hand );
+            if ( value < 5 || value > 11 )
+                return false;
+
+            return pointRatio > hardDoubleDownNumbers[ value - 5 ][ openDealerValue - 2 ];
+        }
+
+        bool do_stand( const Hand& hand, int openDealerValue, double pointRatio )
+        {
+            const auto playerValue = getMaxValidValue( hand );
+            if ( isSoft( hand ) )
+            {
+                if ( playerValue > 18 )
+                    return true;
+                if ( playerValue == 18 )
+                {
+                    if ( openDealerValue < 9 || ( openDealerValue == 10 && pointRatio > 12 ) ||
+                         ( openDealerValue == 11 && pointRatio > -6 ) )
+                        return true;
+                }
+                if ( playerValue == 17 && openDealerValue == 7 && pointRatio > 29 )
+                    return true;
+                return false;
+            }
+
+            if ( playerValue < 12 )
+                return false;
+
+            if ( playerValue > 17 )
+                return true;
+
+            return pointRatio > hardStandingNumbers[ playerValue - 12 ][ openDealerValue - 2 ];
+        }
+    }
+
+    PointCountStrategy::PointCountStrategy( Deck& deck, Hand& dealerHand )
+        : deck( deck ), dealerHand( dealerHand )
+    {
+    }
+
+    Decision PointCountStrategy::operator()( const std::vector< Hand >& hands, const Hand& hand,
+                                             bool splitAllowed, bool doubleDownAllowed,
+                                             bool insuranceAllowed ) const
+    {
+        const auto pointRatio = computePointCountRatio( hands );
+        if ( insuranceAllowed )
+        {
+            if ( dealerHand.front() == Card::_A && pointRatio > 8 )
+                return Decision::Insure;
+        }
+
+        if ( isBust( hand ) )
+            return Decision::Stand;
+        const auto openDealerValue = getValue( dealerHand.front() );
+        if ( splitAllowed && point_count::do_split( hand, openDealerValue, pointRatio ) )
+            return Decision::Split;
+
+        //            std::cout << openDealerValue << " || " << hand << std::endl;
+        if ( doubleDownAllowed && point_count::do_double_down( hand, openDealerValue, pointRatio ) )
+            return Decision::DoubleDown;
+
+        if ( point_count::do_stand( hand, openDealerValue, pointRatio ) )
+            return Decision::Stand;
+        return Decision::Draw;
+    }
+
+    double PointCountStrategy::computePointCountRatio( const std::vector< Hand >& hands ) const
+    {
+        const auto pointsInPlay =
+            accumulate( begin( hands ), end( hands ), getPoints( dealerHand.front() ),
+                        [this]( int sum, const Hand& hand ) {
+                            return sum + accumulate( begin( hand ), end( hand ), 0,
+                                                     [this]( int sum, Card card ) {
+                                                         return sum + getPoints( card );
+                                                     } );
+                        } );
+
+        const auto points = accumulate( begin( deck.getCardTypes() ), end( deck.getCardTypes() ),
+                                        pointsInPlay, [this]( int sum, Card card ) {
+                                            return sum +=
+                                                   getPoints( card ) * deck.getUsedCount( card );
+                                        } );
+
+        if ( deck.size() == 0 )
+        {
+            return std::numeric_limits< double >::lowest();
+        }
+
+        //        std::cout << "dealer points: " << getPoints(dealerHand.front()) << std::endl;
+        //        std::cout << "points in play: " << pointsInPlay << std::endl;
+        //        std::cout << "points: " << points << std::endl;
+        const auto ratio = 100 * double( points ) / deck.size();
+        //        std::cout << "ratio: " << ratio << std::endl;
+        return ratio;
+    }
+
+    int PointCountStrategy::getPoints( Card card ) const
+    {
+        const auto value = getValue( card );
+        if ( value <= maxSmallValue )
+            return 1;
+        if ( value >= minLargeValue )
+            return -1;
+        return 0;
     }
 }

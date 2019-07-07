@@ -2,6 +2,7 @@
 
 #include <blackjack/Player.h>
 
+#include <algorithm>
 #include <cassert>
 #include <iostream>
 #include <limits>
@@ -15,7 +16,7 @@ namespace blackjack
 
         void draw( Hand& hand, Deck& deck )
         {
-            const auto card = deck.getRandomValue();
+            const auto card = deck.getRandomCard();
             hand.push_back( card );
         }
 
@@ -57,6 +58,10 @@ namespace blackjack
         void printPLStats()
         {
             std::cout << "earnings distribution" << std::endl;
+            //            const auto comp = [](const auto& lhs, const auto& rhs){ return lhs->first
+            //            < rhs->first; };
+            //            sort(begin(wins), end(wins), comp);
+            //            sort(begin(losses), end(losses), comp);
             for ( const auto& p : wins )
                 std::cout << p.first << ":\t" << p.second << std::endl;
 
@@ -96,7 +101,7 @@ namespace blackjack
                           << getEarnings( normalCond, doubleDownCond, blackjackCond, bet )
                           << std::endl;
             };
-            std::vector< double > bets = {1, 12.5};
+            std::vector< double > bets = {1, 2, 3, 4, 5};
             for ( auto bet : bets )
                 printStats( bet );
         }
@@ -129,6 +134,30 @@ namespace blackjack
 
     Record playDealerAfterStartingHand( Deck& deck, Player& player, Player& dealer )
     {
+        assert( player.hands.size() <= 2 );
+
+        Record record;
+        bool allBust = true;
+        for ( auto i = 0u; i < player.hands.size(); ++i )
+        {
+            const auto maxPlayerValue = getMaxValidValue( player.hands[ i ] );
+            if ( maxPlayerValue == -1 )
+            {
+                record.losses++;
+                player.decider.removeCash( player.bets[ i ] );
+                losses[ player.bets[ i ] ]++;
+            }
+            else
+            {
+                allBust = false;
+            }
+        }
+
+        if ( allBust )
+        {
+            return record;
+        }
+
         auto decision = dealer.decider( dealer.hands, dealer.hands.front() );
         while ( decision == Decision::Draw )
         {
@@ -136,7 +165,6 @@ namespace blackjack
             decision = dealer.decider( dealer.hands, dealer.hands.front() );
         }
 
-        Record record;
         //        std::cout << "Hands: " << player.hands.size() << std::endl;
         for ( auto i = 0u; i < player.hands.size(); ++i )
         {
@@ -150,9 +178,6 @@ namespace blackjack
             const auto maxDealerValue = getMaxValidValue( dealer.hands.front() );
             if ( maxPlayerValue == -1 )
             {
-                record.losses++;
-                player.decider.removeCash( player.bets[ i ] );
-                losses[ player.bets[ i ] ]++;
                 continue;
             }
             if ( maxPlayerValue > maxDealerValue )
@@ -166,7 +191,6 @@ namespace blackjack
             {
                 record.ties++;
                 ties[ player.bets[ i ] ]++;
-                //                std::cout << "draw" << std::endl;
                 continue;
             }
 
@@ -178,12 +202,16 @@ namespace blackjack
         return record;
     }
 
-    Record playAfterStartingHand( Deck& deck, Player& player, Player& dealer, bool allowSplitting,
-                                  bool splitAces )
+    Record playAfterStartingHand( Deck& deck, Player& player, Player& dealer, const Rules& rules,
+                                  bool wasSplit, bool splitAces )
     {
         for ( auto i = 0u; i < player.hands.size(); ++i )
         {
-            auto decision = player.decider( player.hands, player.hands[ i ], allowSplitting );
+            auto& hand = player.hands[ i ];
+            auto decision =
+                player.decider( player.hands, hand, rules.isSplittingAllowed( hand ) && !wasSplit,
+                                rules.isDoubleDownAllowed( hand ), false );
+            std::cout << "player decision: " << decision << std::endl;
             if ( splitAces )
                 decision = Decision::Stand;
 
@@ -195,18 +223,18 @@ namespace blackjack
                 player.hands[ i ].pop_back();
                 auto copy = player.hands[ i ];
                 const auto card = copy.front();
-                player.hands[ i ].push_back( deck.getRandomValue() );
-                copy.push_back( deck.getRandomValue() );
+                player.hands[ i ].push_back( deck.getRandomCard() );
+                copy.push_back( deck.getRandomCard() );
                 player.hands.push_back( copy );
                 player.bets.push_back( player.bets[ i ] );
-                return playAfterStartingHand( deck, player, dealer, false, card == Card::_A );
+                return playAfterStartingHand( deck, player, dealer, rules, true, card == Card::_A );
             }
 
             if ( decision == Decision::DoubleDown )
             {
-                //                std::cout << "double down" << std::endl;
-                //                std::cout << dealer.hands.front().hand.values[0] << std::endl;
-                //                std::cout << handWithBet.hand << std::endl;
+                std::cout << "double down" << std::endl;
+                std::cout << dealer.hands.front()[ 0 ] << std::endl;
+                std::cout << player.hands[ i ] << std::endl;
                 player.bets[ i ] *= 2;
                 draw( player.hands[ i ], deck );
                 decision = Decision::Stand;
@@ -215,14 +243,14 @@ namespace blackjack
             while ( decision == Decision::Draw )
             {
                 draw( player.hands[ i ], deck );
-                decision = player.decider( player.hands, player.hands[ i ], allowSplitting );
+                decision = player.decider( player.hands, hand, false, false, false );
             }
         }
 
         return playDealerAfterStartingHand( deck, player, dealer );
     }
 
-    Record playAgainstDealer( Player& player, Player& dealer, Deck& deck )
+    Record playAgainstDealer( Player& player, Player& dealer, Deck& deck, const Rules& rules )
     {
         std::cout << "\n === New Game" << std::endl;
         static int counter = 0;
@@ -240,10 +268,11 @@ namespace blackjack
         dealer.hands.front() = Hand{};
         DiscardCardsAtEndOfGame playerDiscard{player, deck};
         DiscardCardsAtEndOfGame dealerDiscard{dealer, deck};
-        player.hands.front().push_back( deck.getRandomValue() );
-        player.hands.front().push_back( deck.getRandomValue() );
-        dealer.hands.front().push_back( deck.getRandomValue() );
-        dealer.hands.front().push_back( deck.getRandomValue() );
+        player.hands.front().push_back( deck.getRandomCard() );
+        player.hands.front().push_back( deck.getRandomCard() );
+        dealer.hands.front().push_back( deck.getRandomCard() );
+        dealer.hands.front().push_back( deck.getRandomCard() );
+        std::cout << "bet: " << player.bets.front() << std::endl;
         std::cout << "initial player hand: " << std::endl;
         std::cout << player.hands.front() << std::endl;
         std::cout << "initial dealer hand: " << std::endl;
@@ -252,12 +281,22 @@ namespace blackjack
         const auto playerValue = getMaxValidValue( player.hands.front() );
         const auto dealerValue = getMaxValidValue( dealer.hands.front() );
 
+        const auto decision = player.decider( player.hands, player.hands.front(), false, false,
+                                              rules.isInsuranceAllowed( player.hands.front() ) );
+
         Record record;
         if ( playerValue == 21 and dealerValue == 21 )
         {
             record.ties++;
             ties[ player.bets.front() ]++;
-            //            std::cout << "draw" << std::endl;
+
+            if ( decision == Decision::Insure )
+            {
+                record.wins++;
+                wins[ player.bets.front() ]++;
+                player.decider.addCash( player.bets.front() );
+            }
+
             return record;
         }
 
@@ -266,6 +305,14 @@ namespace blackjack
             record.wins++;
             player.decider.addCash( 1.5 * player.bets.front() );
             wins[ 1.5 * player.bets.front() ]++;
+
+            if ( decision == Decision::Insure )
+            {
+                record.losses++;
+                losses[ 0.5 * player.bets.front() ]++;
+                player.decider.removeCash( 0.5 * player.bets.front() );
+            }
+
             return record;
         }
 
@@ -274,20 +321,29 @@ namespace blackjack
             record.losses++;
             player.decider.removeCash( player.bets.front() );
             losses[ player.bets.front() ]++;
+
+            if ( decision == Decision::Insure )
+            {
+                record.wins++;
+                wins[ player.bets.front() ]++;
+                player.decider.addCash( player.bets.front() );
+            }
+
             return record;
         }
 
-        const auto result = playAfterStartingHand( deck, player, dealer );
+        const auto result = playAfterStartingHand( deck, player, dealer, rules );
         return result;
     }
 
-    Record playAgainstDealer( Player& player, Player& dealer, Deck& deck, int numberOfGames )
+    Record playAgainstDealer( Player& player, Player& dealer, Deck& deck, const Rules& rules,
+                              int numberOfGames )
     {
         wins.clear();
         losses.clear();
         Record record;
         for ( auto i = 0; i < numberOfGames; ++i )
-            record += playAgainstDealer( player, dealer, deck );
+            record += playAgainstDealer( player, dealer, deck, rules );
 
         std::cout << "final deck" << std::endl;
         std::cout << deck << std::endl;

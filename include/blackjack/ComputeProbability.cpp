@@ -1,67 +1,22 @@
 #include "ComputeProbability.h"
 
 #include <blackjack/Card.h>
+#include <blackjack/Draw.h>
 #include <blackjack/Game.h>
 #include <blackjack/Player.h>
 
 #include <cassert>
 #include <iostream>
+#include <map>
+#include <tuple>
 
 namespace blackjack
 {
-
-    std::ostream& operator<<( std::ostream& os, const Probability& probability )
-    {
-        return os << "win: " << probability.win << ", tie: " << probability.tie
-                  << ", loss: " << probability.loss
-                  << ", expected payout: " << probability.expectedPayout;
-    }
-
-    namespace
-    {
-        void draw( Hand& hand, Deck& deck, Card& card )
-        {
-            deck.draw( card );
-            hand.push_back( card );
-        }
-
-        struct DiscardLastCard
-        {
-            ~DiscardLastCard()
-            {
-                deck.undraw( hand.back() );
-                hand.pop_back();
-            }
-
-            Hand& hand;
-            Deck& deck;
-        };
-
-        template < class F >
-        Probability drawPossibleCardsAndEvaluate( Hand& hand, Deck& deck, F f )
-        {
-            Probability probability;
-            for ( auto card : deck.getCardTypes() )
-            {
-                const auto count = deck.getCount( card );
-                if ( count == 0 )
-                    continue;
-
-                const auto p = double( count ) / deck.size();
-                draw( hand, deck, card );
-                DiscardLastCard discard{hand, deck};
-                const auto subProbability = f();
-                probability.axpy( p, subProbability );
-            }
-            return probability;
-        }
-    }
-
-    Probability computeProbabilityAfterPlayer( Player& player, Player& dealer, Deck& deck,
+    Expectation computeExpectationAfterPlayer( Player& player, Player& dealer, Deck& deck,
                                                bool firstCall )
     {
         assert( player.hands.size() <= 2 );
-        Probability probability;
+        Expectation probability;
         bool allBust = true;
         if ( firstCall )
         {
@@ -72,7 +27,7 @@ namespace blackjack
                 {
                     const auto p = 1.0 / player.hands.size();
                     probability.loss += p;
-                    probability.expectedPayout -= p * player.bets[ i ];
+                    probability.payout -= p * player.bets[ i ];
                 }
                 else
                 {
@@ -91,7 +46,7 @@ namespace blackjack
         {
             return drawPossibleCardsAndEvaluate(
                 dealer.hands.front(), deck, [&player, &dealer, &deck] {
-                    return computeProbabilityAfterPlayer( player, dealer, deck, false );
+                    return computeExpectationAfterPlayer( player, dealer, deck, false );
                 } );
         }
 
@@ -110,7 +65,7 @@ namespace blackjack
             if ( maxPlayerValue > maxDealerValue )
             {
                 probability.win += p;
-                probability.expectedPayout += p * player.bets[ i ];
+                probability.payout += p * player.bets[ i ];
                 continue;
             }
             if ( maxPlayerValue == maxDealerValue )
@@ -120,7 +75,7 @@ namespace blackjack
             }
 
             probability.loss += p;
-            probability.expectedPayout -= p * player.bets[ i ];
+            probability.payout -= p * player.bets[ i ];
         }
 
         return probability;
@@ -128,31 +83,40 @@ namespace blackjack
 
     namespace
     {
-        Probability computeProbabilityAfterStartingHandImpl( Player& player, Player& dealer,
+        Expectation computeProbabilityAfterStartingHandImpl( Player& player, Player& dealer,
                                                              Deck& deck, const Rules& rules,
-                                                             bool splitAces = false )
+                                                             bool splitAces = false,
+                                                             bool wasSplit = false )
         {
+            //            std::cout << __PRETTY_FUNCTION__ << std::endl;
             for ( auto i = 0u; i < player.hands.size(); ++i )
             {
-                auto decision =
-                    player.hands[ i ].size() > 1
-                        ? player.decider( player.hands, player.hands[ i ],
-                                          rules.isSplittingAllowed( player.hands[ i ] ) &&
-                                              !splitAces )
-                        : Decision::Draw;
+                auto& hand = player.hands[ i ];
+                auto decision = hand.size() > 1
+                                    ? player.decider( player.hands, hand,
+                                                      rules.isSplittingAllowed( hand ) && !wasSplit,
+                                                      rules.isDoubleDownAllowed( hand ), false )
+                                    : Decision::Draw;
 
+                //                std::cout << player.hands[i] <<  ": " << decision << std::endl;
                 if ( splitAces )
                     decision = Decision::Stand;
 
                 if ( decision == Decision::Split )
                 {
-                    player.hands[ i ].pop_back();
-                    auto copy = player.hands[ i ];
+                    //                    std::cout << "N: " << player.hands.size() << std::endl;
+                    //                    std::cout << "SPLIT: " << player.hands[i] << std::endl;
+                    hand.pop_back();
+                    auto copy = hand;
                     const auto card = copy.front();
                     player.hands.push_back( copy );
                     player.bets.push_back( player.bets[ i ] );
-                    return computeProbabilityAfterStartingHandImpl( player, dealer, deck, rules,
-                                                                    card == Card::_A );
+                    const auto probability = computeProbabilityAfterStartingHandImpl(
+                        player, dealer, deck, rules, card == Card::_A, true );
+                    deck.undraw( player.hands.back().front() );
+                    player.hands.pop_back();
+                    player.bets.pop_back();
+                    return probability;
                 }
 
                 if ( decision == Decision::DoubleDown )
@@ -162,90 +126,164 @@ namespace blackjack
                     //                std::cout << handWithBet.hand << std::endl;
                     player.bets[ i ] *= 2;
 
-                    return drawPossibleCardsAndEvaluate(
-                        player.hands[ i ], deck, [&player, &dealer, &deck] {
-                            return computeProbabilityAfterPlayer( player, dealer, deck );
+                    const auto probability =
+                        drawPossibleCardsAndEvaluate( hand, deck, [&player, &dealer, &deck] {
+                            return computeExpectationAfterPlayer( player, dealer, deck );
                         } );
-                    //                    Probability probability;
-                    //                    for(auto card : deck.getCardTypes())
-                    //                    {
-                    //                        const auto count = deck.getCount(card);
-                    //                        if(count == 0)
-                    //                            continue;
-
-                    //                        const auto p = double(count)/deck.size();
-                    //                        draw(player.hands[i], deck, card);
-                    //                        DiscardLastCard discard(player.hands[i], deck);
-                    //                        const auto subProbability =
-                    //                        playDealerAfterStartingHand(player, dealer, deck);
-                    //                        probability.axpy(p, subProbability);
-                    //                    }
+                    player.bets[ i ] = player.decider.chooseBet( deck );
+                    return probability;
                 }
 
                 if ( decision == Decision::Draw )
                 {
-                    return drawPossibleCardsAndEvaluate(
-                        player.hands[ i ], deck, [&player, &dealer, &deck, &rules] {
-                            return computeProbabilityAfterStartingHandImpl( player, dealer, deck,
-                                                                            rules );
-                        } );
+                    return drawPossibleCardsAndEvaluate( hand, deck, [&player, &dealer, &deck,
+                                                                      &rules, splitAces, wasSplit] {
+                        return computeProbabilityAfterStartingHandImpl( player, dealer, deck, rules,
+                                                                        splitAces, wasSplit );
+                    } );
                 }
             }
 
-            return computeProbabilityAfterPlayer( player, dealer, deck );
+            return computeExpectationAfterPlayer( player, dealer, deck );
         }
     }
 
-    Probability::Probability( double win, double tie, double loss, double expectedPayout )
-        : win( win ), tie( tie ), loss( loss ), expectedPayout( expectedPayout )
-    {
-    }
-
-    Probability& Probability::axpy( double a, const Probability& other )
-    {
-        win += a * other.win;
-        tie += a * other.tie;
-        loss += a * other.loss;
-        expectedPayout += a * other.expectedPayout;
-        return *this;
-    }
-
-    Probability computeProbabilityAfterStartingHand( Player& player, Player& dealer, Deck& deck,
+    Expectation computeExpectationAfterStartingHand( Player& player, Player& dealer, Deck& deck,
                                                      const Rules& rules )
     {
+        //        std::cout << __PRETTY_FUNCTION__ << std::endl;
         const auto playerValue = getMaxValidValue( player.hands.front() );
         const auto dealerValue = getMaxValidValue( dealer.hands.front() );
 
-        Probability probability;
+        const auto decision = player.decider( player.hands, player.hands.front(), false, false,
+                                              rules.isInsuranceAllowed( player.hands.front() ) );
+
+        Expectation expectation;
         if ( playerValue == 21 and dealerValue == 21 )
         {
-            probability.tie++;
-            return probability;
+            if ( decision == Decision::Insure )
+            {
+                expectation.win = 0.5;
+                expectation.tie = 0.5;
+                expectation.payout = player.bets.front();
+            }
+            else
+            {
+                expectation.tie++;
+            }
+            return expectation;
         }
 
         if ( playerValue == 21 and dealerValue != 21 )
         {
-            probability.win++;
-            probability.expectedPayout = 1.5 * player.bets.front();
-            return probability;
+            if ( decision == Decision::Insure )
+            {
+                expectation.win = 0.5;
+                expectation.loss = 0.5;
+                expectation.payout = player.bets.front();
+            }
+            else
+            {
+                expectation.win = 1;
+                expectation.payout = rules.factorForNaturals * player.bets.front();
+            }
+            return expectation;
         }
 
         if ( playerValue != 21 and dealerValue == 21 )
         {
-            probability.loss++;
-            probability.expectedPayout = -player.bets.front();
-            return probability;
+            if ( decision == Decision::Insure )
+            {
+                expectation.win = 0.5;
+                expectation.loss = 0.5;
+            }
+            else
+            {
+                expectation.loss = 1;
+                expectation.payout = -player.bets.front();
+            }
+            return expectation;
         }
 
         return computeProbabilityAfterStartingHandImpl( player, dealer, deck, rules );
     }
 
-    Probability computeProbabilityAfterOpenCards( Player& player, Player& dealer, Deck& deck,
+    std::future< Expectation > computeExpectationAfterStartingHandAsync( Player& player,
+                                                                         Player& dealer, Deck& deck,
+                                                                         const Rules& rules )
+    {
+        return std::async( std::launch::async, [player, dealer, deck, rules]() mutable {
+            return computeExpectationAfterStartingHand( player, dealer, deck, rules );
+        } );
+    }
+
+    Expectation computeExpectationAfterOpenCards( Player& player, Player& dealer, Deck& deck,
                                                   const Rules& rules )
     {
+        //        std::cout << __PRETTY_FUNCTION__ << std::endl;
         return drawPossibleCardsAndEvaluate(
             dealer.hands.front(), deck, [&player, &dealer, &deck, &rules] {
-                return computeProbabilityAfterStartingHand( player, dealer, deck, rules );
+                //            std::cout << "second dealer card: " << dealer.hands.front().back() <<
+                //            std::endl;
+                return computeExpectationAfterStartingHand( player, dealer, deck, rules );
             } );
+        //        return drawPossibleCardsAndEvaluateParallel(dealer.hands.front(), deck,
+        //                                                    [&player, &dealer, &deck, &rules]
+        //        {
+        //            return [player, dealer, deck, &rules] () mutable
+        //            {
+        //                return computeExpectationAfterStartingHand( player, dealer, deck, rules);
+        //            };
+        //        });
+    }
+
+    void allProbabilites( Player& player, Player& dealer, Deck& deck, const Rules& rules,
+                          std::ostream& os )
+    {
+        drawPossibleCards( player.hands.front(), deck, [&]( double ) {
+            //            std::cout << "first player card: " << player.hands.front().back() <<
+            //            std::endl;
+            drawPossibleCards( player.hands.front(), deck, [&]( double ) {
+                //                std::cout << "second player card: " << player.hands.front().back()
+                //                << std::endl;
+                os << player.hands.front() << ": " << std::flush;
+                drawPossibleCards( dealer.hands.front(), deck, [&]( double ) {
+                    //                    std::cout << "first dealer card: " <<
+                    //                    dealer.hands.front().back() << std::endl;
+                    const auto subProbability =
+                        computeExpectationAfterOpenCards( player, dealer, deck, rules );
+                    os << subProbability.payout << ", " << std::flush;
+                } );
+                os << std::endl;
+            } );
+        } );
+    }
+
+    Expectation computeExpectationForFirstRound( Player& player, Player& dealer, Deck& deck,
+                                                 const Rules& rules )
+    {
+        //        static int counter = 0;
+        std::map< std::tuple< Card, Card, Card >, Expectation > cachedProbabilities;
+        return drawPossibleCardsAndEvaluate( player.hands.front(), deck, [&] {
+            //            std::cout << ++counter << ": " << player.hands.front() << std::endl;
+            return drawPossibleCardsAndEvaluate( player.hands.front(), deck, [&] {
+                //                 std::cout << " -> " << player.hands.back() << " vs. ";
+                return drawPossibleCardsAndEvaluate( dealer.hands.front(), deck, [&] {
+                    const auto key = std::make_tuple(
+                        min( player.hands.front().front(), player.hands.front().back() ),
+                        max( player.hands.front().front(), player.hands.front().back() ),
+                        dealer.hands.front().front() );
+                    auto iter = cachedProbabilities.find( key );
+                    if ( iter != end( cachedProbabilities ) )
+                    {
+                        return iter->second;
+                    }
+                    //                    std::cout << dealer.hands.front() << std::endl;
+                    auto p = computeExpectationAfterOpenCards( player, dealer, deck, rules );
+                    cachedProbabilities[ key ] = p;
+                    return p;
+                } );
+            } );
+        } );
     }
 }

@@ -1,14 +1,20 @@
 project(blackjack)
 cmake_minimum_required(VERSION 3.8)
 
+find_package(Threads REQUIRED)
+
 add_library(blackjack_lib
     include/blackjack/BettingStrategy.cpp
     include/blackjack/Card.cpp
+    include/blackjack/CompareStandingWithDrawing.cpp
     include/blackjack/ComputeProbability.cpp
+    include/blackjack/Draw.cpp
+    include/blackjack/Expectation.cpp
     include/blackjack/Game.cpp
     include/blackjack/Player.cpp
     include/blackjack/Strategy.cpp
 )
+target_link_libraries(blackjack_lib PRIVATE Threads::Threads)
 target_include_directories(blackjack_lib PUBLIC
     $<INSTALL_INTERFACE:include>
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

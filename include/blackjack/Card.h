@@ -6,23 +6,23 @@
 #include <ostream>
 
 #define CARDS                                                                                      \
-    X( 2, 2 )                                                                                      \
-    X( 3, 3 )                                                                                      \
-    X( 4, 4 )                                                                                      \
-    X( 5, 5 )                                                                                      \
-    X( 6, 6 )                                                                                      \
-    X( 7, 7 )                                                                                      \
-    X( 8, 8 )                                                                                      \
-    X( 9, 9 )                                                                                      \
-    X( 10, 10 )                                                                                    \
-    X( J, 10 )                                                                                     \
-    X( Q, 10 )                                                                                     \
-    X( K, 10 )                                                                                     \
-    X( A, 11 )
+    X( 2, 2, 0 )                                                                                   \
+    X( 3, 3, 1 )                                                                                   \
+    X( 4, 4, 2 )                                                                                   \
+    X( 5, 5, 3 )                                                                                   \
+    X( 6, 6, 4 )                                                                                   \
+    X( 7, 7, 5 )                                                                                   \
+    X( 8, 8, 6 )                                                                                   \
+    X( 9, 9, 7 )                                                                                   \
+    X( 10, 10, 8 )                                                                                 \
+    X( J, 10, 9 )                                                                                  \
+    X( Q, 10, 10 )                                                                                 \
+    X( K, 10, 11 )                                                                                 \
+    X( A, 11, 12 )
 
 namespace blackjack
 {
-#define X( key, value ) _##key,
+#define X( key, value, index ) _##key,
     enum class Card
     {
         CARDS
@@ -31,7 +31,17 @@ namespace blackjack
 
     std::ostream& operator<<( std::ostream& os, Card card );
 
+#define X( key, value, index ) f( Card::_##key );
+    template < class F >
+    void forEachCard( F f )
+    {
+        CARDS
+    }
+#undef X
+
     int getValue( Card card );
+
+    int getIndex( Card card );
 
     Card min( Card lhs, Card rhs );
 
@@ -81,15 +91,21 @@ namespace blackjack
     class Deck
     {
     public:
-        Card getRandomValue();
+        explicit Deck( bool useFastGetIndex = true ) noexcept;
+
+        Card getRandomCard();
 
         void add( Card card, int count = 1 );
 
-        void draw( Card card, int count = 1 );
+        Card draw( Card card, int count = 1 );
 
         void undraw( Card card, int count = 1 );
 
         void discard( const std::vector< Hand >& hands );
+
+        void discard( Card card );
+
+        void burn( Card card );
 
         int size() const;
 
@@ -117,18 +133,20 @@ namespace blackjack
 
         double getRatio( Card card ) const;
 
-        int getIndex( Card card ) const;
-
         const Hand& getCardTypes() const;
 
         void reshuffle();
 
     private:
+        int getIndex( Card card ) const;
+
         Hand cards;
         std::vector< int > counts;
         std::vector< int > usedCount;
         std::vector< int > fullCount;
         int initialSize = 0;
+        int nCards = initialSize;
+        const bool useFastGetIndex;
     };
 
     Deck create52CardDeck();

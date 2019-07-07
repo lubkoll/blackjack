@@ -8,10 +8,12 @@
 #include <vector>
 #include <ostream>
 
+#define likely( x ) __builtin_expect( !!( x ), 1 )
+
 namespace blackjack
 {
 
-#define X( key, value )                                                                            \
+#define X( key, value, index )                                                                     \
     if ( Card::_##key == card )                                                                    \
         return os << #key;
     std::ostream& operator<<( std::ostream& os, Card card )
@@ -21,12 +23,28 @@ namespace blackjack
     }
 #undef X
 
-#define X( key, value )                                                                            \
-    if ( Card::_##key == card )                                                                    \
+#define X( key, value, index )                                                                     \
+    case Card::_##key:                                                                             \
         return value;
     int getValue( Card card )
     {
-        CARDS
+        switch ( card )
+        {
+            CARDS
+        }
+        return -1;
+    }
+#undef X
+
+#define X( key, value, index )                                                                     \
+    case Card::_##key:                                                                             \
+        return index;
+    int getIndex( Card card )
+    {
+        switch ( card )
+        {
+            CARDS
+        }
         return -1;
     }
 #undef X
@@ -121,7 +139,11 @@ namespace blackjack
         return getMaxValidValue( hand ) == -1;
     }
 
-    Card Deck::getRandomValue()
+    Deck::Deck( bool useFastGetIndex ) noexcept : useFastGetIndex( useFastGetIndex )
+    {
+    }
+
+    Card Deck::getRandomCard()
     {
         using clock = std::chrono::system_clock;
 
@@ -150,26 +172,22 @@ namespace blackjack
         fullCount.push_back( count );
         usedCount.push_back( 0 );
         initialSize += count;
+        nCards += count;
     }
 
-    void Deck::draw( Card card, int count )
+    Card Deck::draw( Card card, int count )
     {
-        const auto index = getIndex( card );
-        if ( index < counts.size() )
-        {
-            counts[ index ] -= count;
-            if ( size() == 0 )
-                reshuffle();
-        }
+        counts[ getIndex( card ) ] -= count;
+        nCards -= count;
+        if ( size() == 0 )
+            reshuffle();
+        return card;
     }
 
     void Deck::undraw( Card card, int count )
     {
-        const auto index = getIndex( card );
-        if ( index < counts.size() )
-        {
-            counts[ index ] += count;
-        }
+        counts[ getIndex( card ) ] += count;
+        nCards += count;
     }
 
     void Deck::discard( const std::vector< Hand >& hands )
@@ -178,24 +196,29 @@ namespace blackjack
         {
             for ( auto card : hand )
             {
-                const auto index = getIndex( card );
-                if ( index < usedCount.size() )
-                    usedCount[ index ]++;
+                discard( card );
             }
         }
     }
 
+    void Deck::discard( Card card )
+    {
+        usedCount[ getIndex( card ) ]++;
+    }
+
+    void Deck::burn( Card card )
+    {
+        discard( draw( card ) );
+    }
+
     int Deck::size() const
     {
-        return accumulate( begin( counts ), end( counts ), 0 );
+        return nCards;
     }
 
     int Deck::getCount( Card card ) const
     {
-        const auto index = getIndex( card );
-        if ( index < counts.size() )
-            return counts[ index ];
-        return 0;
+        return counts[ getIndex( card ) ];
     }
 
     int Deck::getCount( int value ) const
@@ -207,8 +230,7 @@ namespace blackjack
 
     int Deck::getCountExcept( Card card ) const
     {
-        const auto offset = -getCount( card );
-        return accumulate( begin( counts ), end( counts ), offset );
+        return nCards - getCount( card );
     }
 
     int Deck::getCountExcept( int value ) const
@@ -220,10 +242,7 @@ namespace blackjack
 
     int Deck::getFullCount( Card card ) const
     {
-        const auto index = getIndex( card );
-        if ( index < fullCount.size() )
-            return fullCount[ index ];
-        return 0;
+        return fullCount[ getIndex( card ) ];
     }
 
     int Deck::getFullCount( int value ) const
@@ -235,10 +254,7 @@ namespace blackjack
 
     int Deck::getUsedCount( Card card ) const
     {
-        const auto index = getIndex( card );
-        if ( index < usedCount.size() )
-            return usedCount[ index ];
-        return 0;
+        return usedCount[ getIndex( card ) ];
     }
 
     int Deck::getUsedCount( int value ) const
@@ -270,12 +286,6 @@ namespace blackjack
         return double( getCount( card ) ) / size();
     }
 
-    int Deck::getIndex( Card card ) const
-    {
-        return distance( begin( cards ), find_if( begin( cards ), end( cards ),
-                                                  [card]( Card c ) { return c == card; } ) );
-    }
-
     const Hand& Deck::getCardTypes() const
     {
         return cards;
@@ -288,8 +298,18 @@ namespace blackjack
             counts[ i ] += usedCount[ i ];
             usedCount[ i ] = 0;
         }
+        nCards = initialSize;
         //            std::cout << "after reset: " << size() << " vs. " << getInitialSize() <<
         //            std::endl;
+    }
+
+    int Deck::getIndex( Card card ) const
+    {
+        if ( likely( useFastGetIndex ) )
+            return blackjack::getIndex( card );
+
+        return distance( begin( cards ), find_if( begin( cards ), end( cards ),
+                                                  [card]( Card c ) { return c == card; } ) );
     }
 
     namespace
@@ -334,3 +354,5 @@ namespace blackjack
         return os;
     }
 }
+
+#undef likely

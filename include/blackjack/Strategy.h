@@ -11,7 +11,8 @@
     X( Draw )                                                                                      \
     X( Stand )                                                                                     \
     X( Split )                                                                                     \
-    X( DoubleDown )
+    X( DoubleDown )                                                                                \
+    X( Insure )
 
 namespace blackjack
 {
@@ -22,11 +23,15 @@ namespace blackjack
     };
 #undef X
 
-    using Strategy = std::function< Decision( const std::vector< Hand >&, const Hand&, bool ) >;
+    using Strategy =
+        std::function< Decision( const std::vector< Hand >&, const Hand&, bool, bool, bool ) >;
 
     std::ostream& operator<<( std::ostream& os, Decision decision );
 
-    Decision defaultDealerStrategy( const std::vector< Hand >&, const Hand& hand, bool );
+    Decision defaultDealerStrategy( const std::vector< Hand >&, const Hand& hand, bool, bool,
+                                    bool );
+
+    Decision alwaysStandStrategy( const std::vector< Hand >&, const Hand&, bool, bool, bool );
 
     namespace basic
     {
@@ -39,8 +44,8 @@ namespace blackjack
     {
         explicit BasicStrategy( Hand& dealerHand );
 
-        Decision operator()( const std::vector< Hand >& hands, const Hand& hand,
-                             bool splitAllowed );
+        Decision operator()( const std::vector< Hand >& hands, const Hand& hand, bool splitAllowed,
+                             bool doubleDownAllowed, bool insuranceAllowed );
 
         Hand& dealerHand;
     };
@@ -64,13 +69,41 @@ namespace blackjack
 
         ~TenCountStrategy();
 
-        Decision operator()( const std::vector< Hand >& hands, const Hand& hand,
-                             bool splitAllowed ) const;
+        Decision operator()( const std::vector< Hand >& hands, const Hand& hand, bool splitAllowed,
+                             bool doubleDownAllowed, bool insuranceAllowed ) const;
 
         double computeTenCount( const std::vector< Hand >& hands ) const;
 
         Deck& deck;
         Hand& dealerHand;
         mutable double minRatio = std::numeric_limits< double >::max();
+    };
+
+    namespace point_count
+    {
+        bool do_split( const Hand& hand, int openDealerValue, double pointRatio,
+                       bool doubleDownOnEightAllowed = true );
+
+        bool do_double_down( const Hand& hand, int openDealerValue, double pointRatio );
+
+        bool do_stand( const Hand& hand, int openDealerValue, double pointRatio );
+    }
+
+    struct PointCountStrategy
+    {
+        PointCountStrategy( Deck& deck, Hand& dealerHand );
+
+        Decision operator()( const std::vector< Hand >& hands, const Hand& hand, bool splitAllowed,
+                             bool doubleDownAllowed, bool insuranceAllowed ) const;
+
+        double computePointCountRatio( const std::vector< Hand >& hands ) const;
+
+        int getPoints( Card card ) const;
+
+        Deck& deck;
+        Hand& dealerHand;
+        mutable double minRatio = std::numeric_limits< double >::max();
+        int maxSmallValue = 7;
+        int minLargeValue = 9;
     };
 }

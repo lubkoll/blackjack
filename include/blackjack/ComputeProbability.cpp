@@ -264,25 +264,21 @@ namespace blackjack
     {
         //        static int counter = 0;
         std::map< std::tuple< Card, Card, Card >, Expectation > cachedProbabilities;
-        return drawPossibleCardsAndEvaluate( player.hands.front(), deck, [&] {
-            //            std::cout << ++counter << ": " << player.hands.front() << std::endl;
-            return drawPossibleCardsAndEvaluate( player.hands.front(), deck, [&] {
-                //                 std::cout << " -> " << player.hands.back() << " vs. ";
-                return drawPossibleCardsAndEvaluate( dealer.hands.front(), deck, [&] {
-                    const auto key = std::make_tuple(
-                        min( player.hands.front().front(), player.hands.front().back() ),
-                        max( player.hands.front().front(), player.hands.front().back() ),
-                        dealer.hands.front().front() );
-                    auto iter = cachedProbabilities.find( key );
-                    if ( iter != end( cachedProbabilities ) )
-                    {
-                        return iter->second;
-                    }
-                    //                    std::cout << dealer.hands.front() << std::endl;
-                    auto p = computeExpectationAfterOpenCards( player, dealer, deck, rules );
-                    cachedProbabilities[ key ] = p;
-                    return p;
-                } );
+        return DrawPossibleCardsAndEvaluate< 2 >::apply( deck, player.hands.front(), [&] {
+            return drawPossibleCardsAndEvaluate( dealer.hands.front(), deck, [&] {
+                const auto key = std::make_tuple(
+                    min( player.hands.front().front(), player.hands.front().back() ),
+                    max( player.hands.front().front(), player.hands.front().back() ),
+                    dealer.hands.front().front() );
+                auto iter = cachedProbabilities.find( key );
+                if ( iter != end( cachedProbabilities ) )
+                {
+                    return iter->second;
+                }
+
+                auto p = computeExpectationAfterOpenCards( player, dealer, deck, rules );
+                cachedProbabilities[ key ] = p;
+                return p;
             } );
         } );
     }

@@ -1,14 +1,14 @@
 #include <blackjack/Card.h>
 #include <blackjack/Game.h>
 #include <blackjack/Player.h>
-#include <blackjack/Strategy.h>
+#include <blackjack/PointCount.h>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 using blackjack::Card;
 using blackjack::ConstantBetSize;
-using blackjack::create52CardDeck;
+using blackjack::create52CardDecks;
 using blackjack::Decision;
 using blackjack::Deck;
 using blackjack::getDealer;
@@ -21,7 +21,7 @@ namespace
 {
     Deck createDeckForScenario_1()
     {
-        auto deck = create52CardDeck();
+        auto deck = create52CardDecks();
         deck.burn( Card::_7 );
         deck.burn( Card::_3 );
         deck.burn( Card::_6 );

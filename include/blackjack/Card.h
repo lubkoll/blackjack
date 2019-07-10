@@ -15,10 +15,10 @@
     X( 8, 8, 6 )                                                                                   \
     X( 9, 9, 7 )                                                                                   \
     X( 10, 10, 8 )                                                                                 \
-    X( J, 10, 9 )                                                                                  \
-    X( Q, 10, 10 )                                                                                 \
-    X( K, 10, 11 )                                                                                 \
-    X( A, 11, 12 )
+    X( J, 10, 10 )                                                                                 \
+    X( Q, 10, 11 )                                                                                 \
+    X( K, 10, 12 )                                                                                 \
+    X( A, 11, 9 )
 
 namespace blackjack
 {
@@ -149,7 +149,9 @@ namespace blackjack
         const bool useFastGetIndex;
     };
 
-    Deck create52CardDeck();
+    Deck create52CardDecks( int n = 1 );
+
+    Deck createSimplified52CardDecks( int n = 1 );
 
     std::ostream& operator<<( std::ostream& os, const Deck& deck );
 }

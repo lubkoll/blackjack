@@ -11,7 +11,7 @@ namespace blackjack
     StandingVsDrawing compareStandingWithDrawing( const Hand& playerHand, Card openDealerCard )
     {
         Rules rules;
-        auto deck = create52CardDeck();
+        auto deck = create52CardDecks();
         for ( auto card : playerHand )
             deck.draw( card );
         deck.draw( openDealerCard );

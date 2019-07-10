@@ -12,7 +12,7 @@ using blackjack::Decision;
 using blackjack::Deck;
 using blackjack::Hand;
 using blackjack::BasicStrategy;
-using blackjack::create52CardDeck;
+using blackjack::create52CardDecks;
 using blackjack::Player;
 using blackjack::getDealer;
 using blackjack::getPlayer;

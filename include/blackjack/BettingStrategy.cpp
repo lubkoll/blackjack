@@ -38,21 +38,4 @@ namespace blackjack
             return b;
         return a;
     }
-
-    PointCountBettingStrategy::PointCountBettingStrategy( double minBet ) noexcept
-        : minBet( minBet )
-    {
-    }
-
-    double PointCountBettingStrategy::operator()( const Deck& deck ) const noexcept
-    {
-        const auto points = deck.getUsedCount( Card::_2 ) + deck.getUsedCount( Card::_3 ) +
-                            deck.getUsedCount( Card::_4 ) + deck.getUsedCount( Card::_5 ) +
-                            deck.getUsedCount( Card::_6 ) + deck.getUsedCount( Card::_7 ) -
-                            deck.getUsedCount( Card::_9 ) - deck.getUsedCount( Card::_10 ) -
-                            deck.getUsedCount( Card::_J ) - deck.getUsedCount( Card::_Q ) -
-                            deck.getUsedCount( Card::_K ) - deck.getUsedCount( Card::_A );
-        const auto pointRatio = 100 * points / deck.size();
-        return std::min( std::max( std::floor( pointRatio / 2 ), 1.0 ), 5.0 ) * minBet;
-    }
 }

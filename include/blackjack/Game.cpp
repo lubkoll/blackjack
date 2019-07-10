@@ -101,7 +101,7 @@ namespace blackjack
                           << getEarnings( normalCond, doubleDownCond, blackjackCond, bet )
                           << std::endl;
             };
-            std::vector< double > bets = {1, 2, 3, 4, 5};
+            std::vector< double > bets = {1, 2, 4, 8, 16};
             for ( auto bet : bets )
                 printStats( bet );
         }
@@ -255,7 +255,7 @@ namespace blackjack
         std::cout << "\n === New Game" << std::endl;
         static int counter = 0;
         ++counter;
-        if ( deck.size() < 8 /*|| counter == 3*/ )
+        if ( deck.size() < std::max( 0.125 * deck.getInitialSize(), 8.0 ) /*|| counter == 3*/ )
         {
             std::cout << "RESHUFFLE" << std::endl;
             deck.reshuffle();

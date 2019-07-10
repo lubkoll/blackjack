@@ -1,10 +1,18 @@
 #include <blackjack/Card.h>
 #include <blackjack/CompareStandingWithDrawing.h>
 #include <blackjack/ComputeProbability.h>
+#include <blackjack/Draw.h>
 #include <blackjack/Game.h>
 #include <blackjack/Player.h>
+#include <blackjack/PointCount.h>
+#include <blackjack/ZenCount.h>
 
+#include <algorithm>
+#include <cmath>
 #include <iostream>
+#include <map>
+#include <vector>
+#include <unordered_map>
 
 using blackjack::Card;
 using blackjack::Decision;
@@ -20,23 +28,29 @@ enum class ChooseStrategy
 {
     Basic,
     TenCount,
-    PointCount
+    PointCount,
+    ZenCount
 };
 
 // void evaluateStrategyForFirstGame
 
 Player getPlayerWithStrategy( Player& dealer, Deck& deck, ChooseStrategy chooseStrategy )
 {
+    const auto minBet = 1.0;
     return chooseStrategy == ChooseStrategy::Basic
                ? blackjack::getPlayer( blackjack::BasicStrategy{dealer.hands.front()},
                                        blackjack::ConstantBetSize{} )
                : chooseStrategy == ChooseStrategy::TenCount
                      ? blackjack::getPlayer(
                            blackjack::TenCountStrategy{deck, dealer.hands.front()},
-                           blackjack::ConstantBetSize{} )
-                     : blackjack::getPlayer(
-                           blackjack::PointCountStrategy{deck, dealer.hands.front()},
-                           blackjack::ConstantBetSize{} );
+                           blackjack::TenCountBettingStrategy{minBet} )
+                     : chooseStrategy == ChooseStrategy::PointCount
+                           ? blackjack::getPlayer(
+                                 blackjack::PointCountStrategy{deck, dealer.hands.front()},
+                                 blackjack::PointCountBettingStrategy{minBet} )
+                           : blackjack::getPlayer(
+                                 blackjack::ZenCountStrategy{deck, dealer.hands.front()},
+                                 blackjack::ZenCountBettingStrategy{minBet} );
 }
 
 void evaluateStrategyForFirstGameAndDifferentDecks( ChooseStrategy chooseStrategy,
@@ -52,7 +66,7 @@ void evaluateStrategyForFirstGameAndDifferentDecks( ChooseStrategy chooseStrateg
     };
 
     blackjack::forEachCard( [chooseStrategy, reference, rules, burnAllCards]( Card card ) {
-        auto deck = blackjack::create52CardDeck();
+        auto deck = blackjack::create52CardDecks();
         burnAllCards( deck, card );
         auto dealer = blackjack::getDealer();
         auto player = getPlayerWithStrategy( dealer, deck, chooseStrategy );
@@ -64,25 +78,47 @@ void evaluateStrategyForFirstGameAndDifferentDecks( ChooseStrategy chooseStrateg
         std::cout << "Difference to reference:\n" << expectation << "\n" << std::endl;
     } );
 
-    auto deck = blackjack::create52CardDeck();
-    burnAllCards( deck, Card::_10 );
-    burnAllCards( deck, Card::_J );
-    burnAllCards( deck, Card::_Q );
-    burnAllCards( deck, Card::_K );
-    auto dealer = blackjack::getDealer();
-    auto player = getPlayerWithStrategy( dealer, deck, chooseStrategy );
+    {
+        auto deck = blackjack::create52CardDecks();
+        burnAllCards( deck, Card::_10 );
+        burnAllCards( deck, Card::_J );
+        burnAllCards( deck, Card::_Q );
+        burnAllCards( deck, Card::_K );
+        auto dealer = blackjack::getDealer();
+        auto player = getPlayerWithStrategy( dealer, deck, chooseStrategy );
 
-    auto expectation = blackjack::computeExpectationForFirstRound( player, dealer, deck, rules );
-    std::cout << "Expectation for deck without 10, J, Q, K:\n" << expectation << std::endl;
-    expectation.axpy( -1, reference );
-    std::cout << "Difference to reference:\n" << expectation << "\n" << std::endl;
+        auto expectation =
+            blackjack::computeExpectationForFirstRound( player, dealer, deck, rules );
+        std::cout << "Expectation for deck without 10, J, Q, K:\n" << expectation << std::endl;
+        expectation.axpy( -1, reference );
+        std::cout << "Difference to reference:\n" << expectation << "\n" << std::endl;
+    }
+
+    {
+        auto deck = blackjack::create52CardDecks();
+        burnAllCards( deck, Card::_2 );
+        burnAllCards( deck, Card::_3 );
+        burnAllCards( deck, Card::_4 );
+        burnAllCards( deck, Card::_5 );
+        burnAllCards( deck, Card::_6 );
+        burnAllCards( deck, Card::_7 );
+        burnAllCards( deck, Card::_8 );
+        auto dealer = blackjack::getDealer();
+        auto player = getPlayerWithStrategy( dealer, deck, chooseStrategy );
+
+        auto expectation =
+            blackjack::computeExpectationForFirstRound( player, dealer, deck, rules );
+        std::cout << "Expectation for deck without 2,3,...,8:\n" << expectation << std::endl;
+        expectation.axpy( -1, reference );
+        std::cout << "Difference to reference:\n" << expectation << "\n" << std::endl;
+    }
 }
 
 void evaluateStrategyForFirstGameAndOneMissingCard( ChooseStrategy chooseStrategy,
                                                     Expectation reference )
 {
     blackjack::forEachCard( [chooseStrategy, reference]( Card card ) {
-        auto deck = blackjack::create52CardDeck();
+        auto deck = blackjack::create52CardDecks();
         deck.burn( card );
         auto dealer = blackjack::getDealer();
         auto player = getPlayerWithStrategy( dealer, deck, chooseStrategy );
@@ -101,12 +137,12 @@ void evaluateStrategyForFirstGameAndOneMissingCard( ChooseStrategy chooseStrateg
 
 Expectation evaluateStrategyForFirstGame( ChooseStrategy chooseStrategy )
 {
-    auto deck = blackjack::create52CardDeck();
+    auto deck = blackjack::createSimplified52CardDecks();
     auto dealer = blackjack::getDealer();
     auto player = getPlayerWithStrategy( dealer, deck, chooseStrategy );
 
     Rules rules;
-    //    rules.isDoubleDownAllowed = Rules::isNeverAllowed;
+    rules.isDoubleDownAllowed = Rules::isAlwaysAllowed;
     rules.isSplittingAllowed = Rules::isNeverAllowed;
     rules.isInsuranceAllowed = Rules::isAlwaysAllowed;
     std::cout << "compute probabilities" << std::endl;
@@ -127,8 +163,8 @@ Expectation evaluateStrategyForFirstGame( ChooseStrategy chooseStrategy )
 
 void compareStandingVsDrawing()
 {
-    Hand playerHand = {Card::_10, Card::_5, Card::_A};
-    auto openDealerCard = Card::_10;
+    Hand playerHand = {Card::_2, Card::_7, Card::_7};
+    auto openDealerCard = Card::_9;
     std::cout << "player hand: " << playerHand << std::endl;
     std::cout << "open dealer card: " << openDealerCard << std::endl;
     const auto result = blackjack::compareStandingWithDrawing( playerHand, openDealerCard );
@@ -136,41 +172,121 @@ void compareStandingVsDrawing()
     std::cout << "drawing : " << result.drawing << std::endl;
 }
 
-int main( int argc, char* argv[] )
+template < int rounds >
+void computePointCountDistribution( int n )
 {
-    using namespace std::chrono;
-    const auto start = high_resolution_clock::now();
+    Deck deck( false );
+    deck.add( Card::_2, 24 * n );
+    deck.add( Card::_8, 4 * n );
+    deck.add( Card::_10, 24 * n );
 
-    //    const auto chooseStrategy = ChooseStrategy::Basic;
-    //    const auto reference = evaluateStrategyForFirstGame(chooseStrategy);
-    //    evaluateStrategyForFirstGameAndOneMissingCard(chooseStrategy, reference);
-    //    compareStandingVsDrawing();
-    //    const auto reference = evaluateStrategyForFirstGame(ChooseStrategy::PointCount);
-    //    std::cout << reference << std::endl;
+    std::vector< std::pair< int, double > > percentagePerRange;
+    const auto insertPointCount = [&percentagePerRange]( double pointCount, double p ) {
+        static auto range = 10.0;
+        const auto index =
+            int( std::round( pointCount / range ) + ( ( pointCount > 0 ) ? 0.1 : -0.1 ) );
+        const auto iter = find_if( begin( percentagePerRange ), end( percentagePerRange ),
+                                   [index]( const auto& pair ) { return pair.first == index; } );
+        if ( iter != end( percentagePerRange ) )
+        {
+            iter->second += p;
+        }
+        else
+        {
+            percentagePerRange.emplace_back( index, p );
+        }
+    };
 
-    if ( argc < 2 )
-        return 1;
-    const int N = std::atoi( argv[ 1 ] );
-    std::cout << "Games: " << N << std::endl;
+    auto maxRatio = std::numeric_limits< double >::lowest();
+    auto minRatio = std::numeric_limits< double >::max();
 
-    auto deck = blackjack::create52CardDeck();
+    Hand hand;
+    blackjack::DrawPossibleCards< rounds >::apply(
+        deck, hand, [&hand, &deck, &insertPointCount, &maxRatio, &minRatio]( double p ) {
+            const auto pointRatio =
+                blackjack::computePointRatio( blackjack::computePoints( hand ), deck );
+            maxRatio = std::max( maxRatio, pointRatio );
+            minRatio = std::min( minRatio, pointRatio );
+            insertPointCount( pointRatio, p );
+        } );
+
+    sort( begin( percentagePerRange ), end( percentagePerRange ),
+          []( const auto& lhs, const auto& rhs ) { return lhs.first < rhs.first; } );
+
+    std::cout << "max: " << maxRatio << ", min: " << minRatio << std::endl;
+    std::cout << "point ratio distribution" << std::endl;
+    for ( const auto& entry : percentagePerRange )
+        std::cout << entry.first << ": " << entry.second << std::endl;
+}
+
+void estimatePointCountDistribution( int nDecks, int nCards )
+{
+    std::unordered_map< int, double > pointCountRangePercentages;
+    const auto N = 500000;
+    for ( auto j = 0; j < N; ++j )
+    {
+        auto deck = blackjack::createSimplified52CardDecks( nDecks );
+        Hand hand;
+        for ( auto i = 0; i < nCards; ++i )
+            hand.push_back( deck.getRandomCard() );
+
+        static const auto range = 5.0;
+        const auto pointRatio =
+            blackjack::computePointRatio( blackjack::computePoints( hand ), deck );
+        const auto index =
+            int( std::round( pointRatio / range ) + ( ( pointRatio > 0 ) ? 0.1 : -0.1 ) );
+        pointCountRangePercentages[ index ] += 1.0 / N;
+    }
+
+    std::vector< std::pair< int, double > > percentagePerRange;
+    transform( begin( pointCountRangePercentages ), end( pointCountRangePercentages ),
+               back_inserter( percentagePerRange ), []( const auto& p ) { return p; } );
+
+    sort( begin( percentagePerRange ), end( percentagePerRange ),
+          []( const auto& lhs, const auto& rhs ) { return lhs.first < rhs.first; } );
+
+    std::cout << "point ratio distribution" << std::endl;
+    for ( const auto& entry : percentagePerRange )
+        std::cout << entry.first << ": " << entry.second << std::endl;
+}
+
+void simulateGames( int nDecks, int nGames, ChooseStrategy chooseStrategy )
+{
+    auto deck = blackjack::create52CardDecks( nDecks );
     auto dealer = blackjack::getDealer();
-    Player player = blackjack::getPlayer( /*blackjack::BasicStrategy{dealer.hands.front().hand},*/
-                                          blackjack::PointCountStrategy{deck, dealer.hands.front()},
-                                          blackjack::PointCountBettingStrategy{1} );
-    //    Player player =
-    //        blackjack::getPlayer( /*blackjack::BasicStrategy{dealer.hands.front().hand},*/
-    //                              blackjack::TenCountStrategy{deck, dealer.hands.front()},
-    //                              blackjack::TenCountBettingStrategy{1, 1, 12.5, 12.5, 12.5} );
+    auto player = getPlayerWithStrategy( dealer, deck, chooseStrategy );
     Rules rules;
-    rules.isSplittingAllowed = Rules::isAlwaysAllowed;
-    const auto record = blackjack::playAgainstDealer( player, dealer, deck, rules, N );
+    const auto record = blackjack::playAgainstDealer( player, dealer, deck, rules, nGames );
     std::cout << record << std::endl;
     const auto payoff =
         double( record.wins - record.losses ) / ( record.wins + record.ties + record.losses );
     std::cout << "payoff: " << payoff << std::endl;
     std::cout << "final cash: " << player.decider.getCash() << std::endl;
     std::cout << "min cash: " << player.decider.getMinCash() << std::endl;
+}
+
+int main( int argc, char* argv[] )
+{
+    using namespace std::chrono;
+    const auto start = high_resolution_clock::now();
+
+    const auto chooseStrategy = ChooseStrategy::ZenCount;
+    //        const auto reference = evaluateStrategyForFirstGame(chooseStrategy);
+    //        evaluateStrategyForFirstGameAndDifferentDecks(chooseStrategy, reference);
+    //        compareStandingVsDrawing();
+    //        const auto reference = evaluateStrategyForFirstGame(chooseStrategy);
+    //        std::cout << reference << std::endl;
+    //    constexpr auto rounds = 35;
+    //    const auto nDecks = 8;
+    ////    computePointCountDistribution<rounds>(nDecks);
+    //    estimatePointCountDistribution(nDecks, rounds);
+
+    if ( argc < 3 )
+        return 1;
+    const int N = std::atoi( argv[ 1 ] );
+    const int nDecks = std::atoi( argv[ 2 ] );
+    std::cout << "Games: " << N << std::endl;
+    simulateGames( nDecks, N, chooseStrategy );
 
     std::cout << "time: "
               << duration_cast< seconds >( high_resolution_clock::now() - start ).count() << " s"

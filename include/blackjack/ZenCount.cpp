@@ -155,8 +155,15 @@ namespace blackjack
         const auto pointRatio = computeZenPointRatio( 0, deck );
         if ( pointRatio < 2 )
             return minBet;
+        if ( pointRatio < 3 )
+            return 2 * minBet;
+        if ( pointRatio < 4 )
+            return 4 * minBet;
+        if ( pointRatio < 8 )
+            return 8 * minBet;
+        return 16 * minBet;
 
-        return std::min( std::round( pointRatio ), 5.0 ) * 4;
+        //        return std::min( std::round( pointRatio ), 5.0 ) * 4;
         //        const auto edge = int(std::floor( pointRatio ) + 0.1);
         //        if(edge == 2)
         //            return minBet;

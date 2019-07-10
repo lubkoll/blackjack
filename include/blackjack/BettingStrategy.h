@@ -37,15 +37,4 @@ namespace blackjack
     private:
         double a, b, c, d, e;
     };
-
-    struct PointCountBettingStrategy
-    {
-    public:
-        explicit PointCountBettingStrategy( double minBet ) noexcept;
-
-        double operator()( const Deck& deck ) const noexcept;
-
-    private:
-        double minBet;
-    };
 }

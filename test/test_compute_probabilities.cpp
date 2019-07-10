@@ -13,7 +13,7 @@ using blackjack::ConstantBetSize;
 using blackjack::Deck;
 using blackjack::Hand;
 using blackjack::BasicStrategy;
-using blackjack::create52CardDeck;
+using blackjack::create52CardDecks;
 using blackjack::Player;
 using blackjack::getDealer;
 using blackjack::getPlayer;
@@ -202,7 +202,7 @@ namespace
             player.hands.front().push_back( card );
         }
 
-        Deck deck = create52CardDeck();
+        Deck deck = create52CardDecks();
         Player dealer = getDealer();
         const double betSize = 1;
         Player player =

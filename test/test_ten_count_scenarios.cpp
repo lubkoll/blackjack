@@ -8,7 +8,7 @@
 
 using blackjack::Card;
 using blackjack::ConstantBetSize;
-using blackjack::create52CardDeck;
+using blackjack::create52CardDecks;
 using blackjack::Decision;
 using blackjack::Deck;
 using blackjack::getDealer;
@@ -21,7 +21,7 @@ namespace
 {
     Deck createDeckForScenario_1()
     {
-        auto deck = create52CardDeck();
+        auto deck = create52CardDecks();
         deck.burn( Card::_4 );
         deck.burn( Card::_5 );
         deck.burn( Card::_9 );

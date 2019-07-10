@@ -152,7 +152,7 @@ namespace blackjack
         std::discrete_distribution< int > distribution{begin( counts ), end( counts )};
 
         const auto card = cards[ distribution( engine ) ];
-        std::cout << "drawing " << card << std::endl;
+        //        std::cout << "drawing " << card << std::endl;
         draw( card );
         return card;
     }
@@ -312,33 +312,43 @@ namespace blackjack
                                                   [card]( Card c ) { return c == card; } ) );
     }
 
-    namespace
+    Deck create52CardDecks( int n )
     {
-        Deck create52CardDecks( int n )
-        {
-            assert( n > 0 );
-            Deck deck;
-            const auto cardCount = 4 * n;
-            deck.add( Card::_2, cardCount );
-            deck.add( Card::_3, cardCount );
-            deck.add( Card::_4, cardCount );
-            deck.add( Card::_5, cardCount );
-            deck.add( Card::_6, cardCount );
-            deck.add( Card::_7, cardCount );
-            deck.add( Card::_8, cardCount );
-            deck.add( Card::_9, cardCount );
-            deck.add( Card::_10, cardCount );
-            deck.add( Card::_J, cardCount );
-            deck.add( Card::_Q, cardCount );
-            deck.add( Card::_K, cardCount );
-            deck.add( Card::_A, cardCount );
-            return deck;
-        }
+        assert( n > 0 );
+        Deck deck;
+        const auto cardCount = 4 * n;
+        deck.add( Card::_2, cardCount );
+        deck.add( Card::_3, cardCount );
+        deck.add( Card::_4, cardCount );
+        deck.add( Card::_5, cardCount );
+        deck.add( Card::_6, cardCount );
+        deck.add( Card::_7, cardCount );
+        deck.add( Card::_8, cardCount );
+        deck.add( Card::_9, cardCount );
+        deck.add( Card::_10, cardCount );
+        deck.add( Card::_A, cardCount );
+        deck.add( Card::_J, cardCount );
+        deck.add( Card::_Q, cardCount );
+        deck.add( Card::_K, cardCount );
+        return deck;
     }
 
-    Deck create52CardDeck()
+    Deck createSimplified52CardDecks( int n )
     {
-        return create52CardDecks( 1 );
+        assert( n > 0 );
+        Deck deck;
+        const auto cardCount = 4 * n;
+        deck.add( Card::_2, cardCount );
+        deck.add( Card::_3, cardCount );
+        deck.add( Card::_4, cardCount );
+        deck.add( Card::_5, cardCount );
+        deck.add( Card::_6, cardCount );
+        deck.add( Card::_7, cardCount );
+        deck.add( Card::_8, cardCount );
+        deck.add( Card::_9, cardCount );
+        deck.add( Card::_10, 4 * cardCount );
+        deck.add( Card::_A, cardCount );
+        return deck;
     }
 
     std::ostream& operator<<( std::ostream& os, const Deck& deck )

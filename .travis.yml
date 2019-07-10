@@ -28,36 +28,15 @@ matrix:
   exclude:
     - env: TRAVIS_EMPTY_JOB_WORKAROUND=true
   include:
-    # LINUX
-    # GCC 5
-    - os: linux
-      env: COMPILER=g++-5 COMPUTE_COVERAGE=false
-      compiler: gcc
-
     # GCC 6
     - os: linux
       env: COMPILER=g++-6 COMPUTE_COVERAGE=true GCOV=gcov-6
       compiler: gcc
       
-    # Clang 3.6
-    - os: linux
-      env: COMPILER=clang++-3.6 CCOMPILER=clang-3.6 COMPUTE_COVERAGE=false
-      compiler: clang
-      
-    # Clang 3.7
-    - os: linux
-      env: COMPILER=clang++-3.7 CCOMPILER=clang-3.7 COMPUTE_COVERAGE=false
-      compiler: clang
-      
     # Clang 3.8
     - os: linux
       env: COMPILER=clang++-3.8 CCOMPILER=clang-3.8 COMPUTE_COVERAGE=false
       compiler: clang
-      
-    # Xcode 7.3
-    - os: osx
-      env: COMPUTE_COVERAGE=false
-      osx_image: xcode7.3
       
     # Xcode 8
     - os: osx
